@@ -1,21 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
+	"strings"
 
 	"github.com/golang/freetype/truetype"
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/examples/resources/fonts"
+	"github.com/hajimehoshi/ebiten/inpututil"
 	"github.com/hajimehoshi/ebiten/text"
 	"golang.org/x/image/font"
 )
 
 const (
-	screenWidth  int = 320
-	screenHeight int = 320
-	blockWidth   int = (screenWidth - 4) / 3
-	blockHeight  int = (screenHeight - 4) / 3
+	ScreenWidth  int = 320
+	ScreenHeight int = 320
+	blockWidth   int = (ScreenWidth - 4) / 3
+	blockHeight  int = (ScreenHeight - 4) / 3
 
 	fontSize float64 = 36
 
@@ -23,10 +26,14 @@ const (
 	yCenter int = blockWidth/2 + int(fontSize/4)
 )
 
+// Player type
 type Player int
 
+// TicTacToe game type
 type TicTacToe struct {
-	Blocks [3][3]Player
+	Blocks     [3][3]Player
+	IsGameOver bool
+	BlocksFill int
 }
 
 var (
@@ -34,15 +41,18 @@ var (
 	black = color.Black
 
 	player1 Player = 1
-	player2 Player = 2
+	player2 Player = -1
 	non     Player = 0
 
 	x string = "X"
 	o string = "O"
 
-	ttt           = &TicTacToe{}
-	noramlFont    font.Face
+	ttt        = &TicTacToe{}
+	noramlFont font.Face
+	// currentPlayer started from player 1 X
 	currentPlayer = player1
+
+	imageGameover *ebiten.Image
 )
 
 func init() {
@@ -58,23 +68,87 @@ func init() {
 		Hinting: font.HintingFull,
 	})
 
+	// Gameover
+	imageGameover, _ = ebiten.NewImage(ScreenWidth, ScreenHeight, ebiten.FilterDefault)
+	imageGameover.Fill(color.NRGBA{0x00, 0x00, 0x00, 0x80})
+	y := (ScreenHeight - blockHeight) / 2
+	drawTextWithShadowCenter(imageGameover, "GAME OVER\n\nPRESS SPACE", 0, y, 1, color.White, ScreenWidth)
 }
 
 func main() {
-	ebiten.Run(update, screenWidth, screenHeight, 1, "Hello World!")
-
+	ebiten.RunGame(ttt)
 }
 
-func update(screen *ebiten.Image) error {
+// Update updates a game by one tick. The given argument represents a screen image.
+func (ttt *TicTacToe) Update(screen *ebiten.Image) error {
+	screen.Clear()
 	screen.Fill(white)
 	ttt.putBlock(screen)
-	x, y := ebiten.CursorPosition()
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && cursorInScreen(x, y) {
+
+	if ttt.IsGameOver {
+		screen.DrawImage(imageGameover, &ebiten.DrawImageOptions{})
+		if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+			ttt.reset()
+		}
+		return nil
+	}
+
+	posX, posY := ebiten.CursorPosition()
+	x, y := mousePosTotXY(posX, posY)
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && cursorInScreen(posX, posY) {
 		ttt.setBlock(currentPlayer, x, y)
 	}
 	return nil
 }
 
+// Layout accepts a native outside size in device-independent pixels and returns the game's logical screen
+// size.
+func (ttt *TicTacToe) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return ScreenWidth, ScreenHeight
+}
+
+// putBlock put block on game screen
+func (ttt *TicTacToe) putBlock(screen *ebiten.Image) {
+	for i := range ttt.Blocks {
+		for j, p := range ttt.Blocks[i] {
+			fmt.Println(p)
+			opts := &ebiten.DrawImageOptions{}
+			// 修改選項，新增 Translate 變形效果
+			opts.GeoM.Translate(float64(1*(j+1)+j*blockWidth), float64(1*(i+1)+i*blockHeight))
+			block := newBlock(p)
+			screen.DrawImage(block, opts)
+		}
+	}
+}
+
+// setBlock set block to "X" or "O"
+func (ttt *TicTacToe) setBlock(player Player, x, y int) {
+	if ttt.isFill(x, y) {
+		return
+	}
+	ttt.Blocks[x][y] = player
+	currentPlayer *= -1
+	ttt.BlocksFill++
+	if ttt.BlocksFill == 9 {
+		ttt.IsGameOver = true
+	}
+}
+
+func (ttt *TicTacToe) isFill(x, y int) bool {
+	return ttt.Blocks[x][y] != 0
+}
+
+func (ttt *TicTacToe) reset() {
+	for i := range ttt.Blocks {
+		for j := range ttt.Blocks[i] {
+			ttt.Blocks[i][j] = 0
+		}
+	}
+	ttt.IsGameOver = false
+	ttt.BlocksFill = 0
+}
+
+// newBlock return a new block
 func newBlock(player Player) *ebiten.Image {
 	block, err := ebiten.NewImage(blockWidth, blockHeight, ebiten.FilterDefault)
 	if err != nil {
@@ -86,30 +160,81 @@ func newBlock(player Player) *ebiten.Image {
 	} else if player == player2 {
 		text.Draw(block, o, noramlFont, xCenter, yCenter, white)
 	}
-
 	return block
 }
 
-func (ttt *TicTacToe) putBlock(screen *ebiten.Image) {
-	for i := range ttt.Blocks {
-		for j, p := range ttt.Blocks[i] {
-			opts := &ebiten.DrawImageOptions{}
-			// 修改選項，新增 Translate 變形效果
-			opts.GeoM.Translate(float64(1*(j+1)+j*blockWidth), float64(1*(i+1)+i*blockHeight))
-			block := newBlock(p)
-			screen.DrawImage(block, opts)
+// cursorInScreen check if curcor is in the game screen
+func cursorInScreen(x, y int) bool {
+	return (x > 0 && y > 0) && (x < 320 && y < 320)
+}
+
+func mousePosTotXY(posX, posY int) (int, int) {
+	return posY / blockWidth, posX / blockHeight
+}
+
+// below's function is from ebiten/examples/blocks
+// used to set game over iamge in this package
+const (
+	arcadeFontBaseSize = 8
+)
+
+var (
+	arcadeFonts map[int]font.Face
+)
+
+func getArcadeFonts(scale int) font.Face {
+	if arcadeFonts == nil {
+		tt, err := truetype.Parse(fonts.ArcadeN_ttf)
+		if err != nil {
+			log.Fatal(err)
 		}
+
+		arcadeFonts = map[int]font.Face{}
+		for i := 1; i <= 4; i++ {
+			const dpi = 72
+			arcadeFonts[i] = truetype.NewFace(tt, &truetype.Options{
+				Size:    float64(arcadeFontBaseSize * i),
+				DPI:     dpi,
+				Hinting: font.HintingFull,
+			})
+		}
+	}
+	return arcadeFonts[scale]
+}
+
+func textWidth(str string) int {
+	maxW := 0
+	for _, line := range strings.Split(str, "\n") {
+		b, _ := font.BoundString(getArcadeFonts(1), line)
+		w := (b.Max.X - b.Min.X).Ceil()
+		if maxW < w {
+			maxW = w
+		}
+	}
+	return maxW
+}
+
+var (
+	shadowColor = color.NRGBA{0, 0, 0, 0x80}
+)
+
+func drawTextWithShadow(rt *ebiten.Image, str string, x, y, scale int, clr color.Color) {
+	offsetY := arcadeFontBaseSize * scale
+	for _, line := range strings.Split(str, "\n") {
+		y += offsetY
+		text.Draw(rt, line, getArcadeFonts(scale), x+1, y+1, shadowColor)
+		text.Draw(rt, line, getArcadeFonts(scale), x, y, clr)
 	}
 }
 
-func (ttt *TicTacToe) setBlock(player Player, x, y int) {
-	xLine := y / blockWidth
-	yLine := x / blockHeight
-	ttt.Blocks[xLine][yLine] = player
+func drawTextWithShadowCenter(rt *ebiten.Image, str string, x, y, scale int, clr color.Color, width int) {
+	w := textWidth(str) * scale
+	x += (width - w) / 2
+	drawTextWithShadow(rt, str, x, y, scale, clr)
 }
 
-func (ttt *TicTacToe) checkWin() {}
-
-func cursorInScreen(x, y int) bool {
-	return (x > 0 && y > 0) && (x < 320 && y < 320)
+func drawTextWithShadowRight(rt *ebiten.Image, str string, x, y, scale int, clr color.Color, width int) {
+	w := textWidth(str) * scale
+	x += width - w
+	drawTextWithShadow(rt, str, x, y, scale, clr)
 }
