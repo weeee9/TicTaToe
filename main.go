@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"image/color"
 	"log"
 	"strings"
@@ -24,6 +24,8 @@ const (
 
 	xCenter int = blockHeight/2 - int(fontSize/4)
 	yCenter int = blockWidth/2 + int(fontSize/4)
+
+	gameoverStr = "      GAME OVER\n\nPRESE SPACE TO RESTART\n\n      ESC TO END"
 )
 
 // Player type
@@ -72,15 +74,21 @@ func init() {
 	imageGameover, _ = ebiten.NewImage(ScreenWidth, ScreenHeight, ebiten.FilterDefault)
 	imageGameover.Fill(color.NRGBA{0x00, 0x00, 0x00, 0x80})
 	y := (ScreenHeight - blockHeight) / 2
-	drawTextWithShadowCenter(imageGameover, "GAME OVER\n\nPRESS SPACE", 0, y, 1, color.White, ScreenWidth)
+	drawTextWithShadowCenter(imageGameover, gameoverStr, 0, y, 1, color.White, ScreenWidth)
 }
 
 func main() {
+	ebiten.SetWindowSize(ScreenWidth, ScreenHeight)
 	ebiten.RunGame(ttt)
 }
 
 // Update updates a game by one tick. The given argument represents a screen image.
 func (ttt *TicTacToe) Update(screen *ebiten.Image) error {
+	return ttt.Draw(screen)
+}
+
+// Draw draw game screen
+func (ttt *TicTacToe) Draw(screen *ebiten.Image) error {
 	screen.Clear()
 	screen.Fill(white)
 	ttt.putBlock(screen)
@@ -89,6 +97,9 @@ func (ttt *TicTacToe) Update(screen *ebiten.Image) error {
 		screen.DrawImage(imageGameover, &ebiten.DrawImageOptions{})
 		if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 			ttt.reset()
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+			return errors.New("END")
 		}
 		return nil
 	}
@@ -111,7 +122,6 @@ func (ttt *TicTacToe) Layout(outsideWidth, outsideHeight int) (int, int) {
 func (ttt *TicTacToe) putBlock(screen *ebiten.Image) {
 	for i := range ttt.Blocks {
 		for j, p := range ttt.Blocks[i] {
-			fmt.Println(p)
 			opts := &ebiten.DrawImageOptions{}
 			// 修改選項，新增 Translate 變形效果
 			opts.GeoM.Translate(float64(1*(j+1)+j*blockWidth), float64(1*(i+1)+i*blockHeight))
