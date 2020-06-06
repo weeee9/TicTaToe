@@ -109,6 +109,7 @@ func (ttt *TicTacToe) Draw(screen *ebiten.Image) error {
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && cursorInScreen(posX, posY) {
 		ttt.setBlock(currentPlayer, x, y)
 	}
+
 	return nil
 }
 
@@ -137,11 +138,14 @@ func (ttt *TicTacToe) setBlock(player Player, x, y int) {
 		return
 	}
 	ttt.Blocks[x][y] = player
-	currentPlayer *= -1
 	ttt.BlocksFill++
 	if ttt.BlocksFill == 9 {
 		ttt.IsGameOver = true
 	}
+	if checkWin(currentPlayer, ttt.Blocks) {
+		ttt.IsGameOver = true
+	}
+	currentPlayer *= -1
 }
 
 func (ttt *TicTacToe) isFill(x, y int) bool {
@@ -180,6 +184,47 @@ func cursorInScreen(x, y int) bool {
 
 func mousePosTotXY(posX, posY int) (int, int) {
 	return posY / blockWidth, posX / blockHeight
+}
+
+func checkWin(p Player, board [3][3]Player) bool {
+	if checkRow(p, board) {
+		return true
+	}
+	if checkCol(p, board) {
+		return true
+	}
+	return checkDia(p, board)
+}
+
+func checkRow(p Player, board [3][3]Player) bool {
+	for _, row := range board {
+		if row[0] == p && row[1] == p && row[2] == p {
+			return true
+		}
+	}
+	return false
+}
+
+func checkCol(p Player, board [3][3]Player) bool {
+	for i := 0; i < 3; i++ {
+		if board[0][i] == p && board[1][i] == p && board[2][i] == p {
+			return true
+		}
+	}
+	return false
+}
+
+func checkDia(p Player, board [3][3]Player) bool {
+	// check main diag
+	if board[0][0] == p && board[1][1] == p && board[2][2] == p {
+		return true
+	}
+
+	// check anit-diag
+	if board[0][2] == p && board[1][1] == p && board[2][0] == p {
+		return true
+	}
+	return false
 }
 
 // below's function is from ebiten/examples/blocks
