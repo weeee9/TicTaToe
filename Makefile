@@ -7,7 +7,7 @@ all: build
 
 # gps is short for go project skeleton
 build:
-	go build -v -o game .
+	go build -v -o tic-tac-toe .
 
 test:
 	go test -v -tags="sqlite json1" ./...
